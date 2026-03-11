@@ -1,0 +1,1701 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TravelSync – AI 여행 플래너</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --card: rgba(255, 255, 255, 0.05);
+            --primary: #6366f1;
+            --pink: #ec4899;
+            --green: #10b981;
+            --red: #ef4444;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: 240px;
+            min-width: 240px;
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border);
+            padding: 24px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: sticky;
+            top: 0;
+            height: 100vh
+        }
+
+        .logo {
+            padding: 0 10px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px
+        }
+
+        .logo h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent
+        }
+
+        .logo p {
+            color: var(--muted);
+            font-size: 0.75rem;
+            margin-top: 2px
+        }
+
+        .nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--muted);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+            width: 100%;
+            transition: all .2s
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text)
+        }
+
+        .nav-btn.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: var(--text);
+            font-weight: 600
+        }
+
+        .nav-btn.active svg {
+            stroke: var(--primary)
+        }
+
+        .nav-icon {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round
+        }
+
+        .sync-badge {
+            margin-top: auto;
+            padding: 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: var(--muted)
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            flex-shrink: 0;
+            animation: pulse 2s infinite
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, .4)
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px transparent
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 transparent
+            }
+        }
+
+        /* MAIN */
+        #main {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            max-height: 100vh
+        }
+
+        .page {
+            display: none;
+            animation: fadeUp .35s ease
+        }
+
+        .page.active {
+            display: block
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px
+        }
+
+        .page-sub {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-size: 0.95rem
+        }
+
+        /* GLASS */
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: transform .2s, box-shadow .2s, border-color .2s
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            border-color: rgba(255, 255, 255, 0.14)
+        }
+
+        /* FORM ELEMENTS */
+        input,
+        select {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color .2s, box-shadow .2s;
+            outline: none;
+            color-scheme: dark
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, .2)
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--muted);
+            font-size: 0.85rem
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem
+        }
+
+        .field {
+            margin-bottom: 1.2rem
+        }
+
+        /* BUTTONS */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, .3)
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, .4)
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border)
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, .08)
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            border-radius: 6px
+        }
+
+        .btn-tag {
+            border-radius: 20px
+        }
+
+        .btn-selected {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, .3)
+        }
+
+        .btn-full {
+            width: 100%;
+            padding: 14px
+        }
+
+        /* CHIPS */
+        .chip {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600
+        }
+
+        .chip-green {
+            background: rgba(16, 185, 129, .18);
+            color: var(--green)
+        }
+
+        .chip-red {
+            background: rgba(239, 68, 68, .18);
+            color: var(--red)
+        }
+
+        .chip-blue {
+            background: rgba(99, 102, 241, .18);
+            color: var(--primary)
+        }
+
+        /* TIMELINE */
+        .timeline {
+            border-left: 2px solid var(--border);
+            margin-left: 8px;
+            padding-left: 20px
+        }
+
+        .tl-item {
+            position: relative;
+            margin-bottom: 1.5rem
+        }
+
+        .tl-dot {
+            position: absolute;
+            left: -29px;
+            top: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 2.5px solid var(--bg);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, .3);
+            transition: transform .2s
+        }
+
+        .tl-item:hover .tl-dot {
+            transform: scale(1.3);
+            background: var(--green)
+        }
+
+        .tl-dot-pink {
+            background: var(--pink);
+            box-shadow: 0 0 0 2px rgba(236, 72, 153, .3)
+        }
+
+        .tl-day {
+            font-weight: 800;
+            color: var(--green);
+            font-size: 0.85rem
+        }
+
+        .tl-pink .tl-day {
+            color: var(--pink)
+        }
+
+        .tl-title {
+            font-weight: 600;
+            margin-top: 2px;
+            font-size: 0.97rem
+        }
+
+        .tl-desc {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-top: 2px
+        }
+
+        .tl-warning {
+            color: var(--red);
+            font-size: 0.8rem;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        /* GRID */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem
+        }
+
+        /* HOME hero */
+        #page-home {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 90vh
+        }
+
+        .hero {
+            text-align: center;
+            max-width: 560px;
+            width: 100%
+        }
+
+        .hero-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem
+        }
+
+        .hero h2 {
+            font-size: 2.6rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: .8rem
+        }
+
+        .hero p {
+            color: var(--muted);
+            font-size: 1.1rem;
+            margin-bottom: 2rem
+        }
+
+        /* DEST CARD */
+        .dest-card {
+            overflow: hidden;
+            cursor: pointer
+        }
+
+        .dest-img {
+            height: 150px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 8px;
+            margin-bottom: 1rem
+        }
+
+        .dest-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: rgba(16, 185, 129, .18);
+            color: var(--green)
+        }
+
+        /* MAP */
+        #leaflet-map {
+            height: 380px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden
+        }
+
+        /* BUDGET BARS */
+        .budget-bar-wrap {
+            margin-top: 6px;
+            height: 7px;
+            background: rgba(255, 255, 255, .1);
+            border-radius: 4px;
+            overflow: hidden
+        }
+
+        .budget-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width .5s
+        }
+
+        /* STAT CARD */
+        .stat-card {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            padding: 1.5rem
+        }
+
+        .stat-icon {
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 1.6rem;
+            line-height: 1
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-bottom: 2px
+        }
+
+        .stat-val {
+            font-size: 1.7rem;
+            font-weight: 700
+        }
+
+        /* EXPENSE LIST */
+        .exp-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px;
+            border-radius: 10px;
+            background: var(--card);
+            border: 1px solid rgba(255, 255, 255, .06);
+            margin-bottom: 8px
+        }
+
+        .exp-name {
+            font-weight: 600;
+            font-size: .97rem
+        }
+
+        .exp-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 3px
+        }
+
+        .exp-amount {
+            font-weight: 700;
+            font-size: 1.05rem
+        }
+
+        /* SCORE LOADING */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 1rem;
+            color: var(--muted)
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+            flex-shrink: 0
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        /* WARNING MODAL */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(4px)
+        }
+
+        .modal-overlay.open {
+            display: flex
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem
+        }
+
+        .modal h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--red);
+            margin-bottom: .6rem
+        }
+
+        .modal p {
+            color: var(--muted);
+            margin-bottom: 1.5rem;
+            font-size: .95rem
+        }
+
+        /* responsive */
+        @media(max-width:900px) {
+
+            .grid-3,
+            .grid-2 {
+                grid-template-columns: 1fr
+            }
+
+            #sidebar {
+                display: none
+            }
+
+            #main {
+                padding: 1rem
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar">
+        <div class="logo">
+            <h1>TravelSync</h1>
+            <p>AI 여행 플래너</p>
+        </div>
+        <button class="nav-btn active" onclick="showPage('home',this)">
+            <svg class="nav-icon" viewBox="0 0 24 24">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            홈
+        </button>
+        <button class="nav-btn" onclick="showPage('recommend',this)">
+            <svg class="nav-icon" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+            </svg>
+            여행지 추천
+        </button>
+        <button class="nav-btn" onclick="showPage('timeline',this)">
+            <svg class="nav-icon" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            타임라인
+        </button>
+        <button class="nav-btn" onclick="showPage('budget',this)">
+            <svg class="nav-icon" viewBox="0 0 24 24">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            경비 관리
+        </button>
+        <div class="sync-badge">
+            <div class="sync-dot"></div>
+            <span>실시간 동기화 중</span>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main id="main">
+
+        <!-- ========= HOME ========= -->
+        <div id="page-home" class="page active">
+            <div class="hero glass">
+                <div class="hero-icon">🌏</div>
+                <h2>완벽한 여행을 계획하세요</h2>
+                <p>AI 추천 · TSP 경로 최적화 · 경비 자동 합산 · 실시간 동기화</p>
+                <div class="form-row" style="margin-bottom:1.5rem;text-align:left">
+                    <div class="field" style="margin:0">
+                        <label>✈️ 출발일</label>
+                        <input type="date" id="travel-date" style="font-size:1rem">
+                    </div>
+                    <div class="field" style="margin:0">
+                        <label>🏠 복귀일</label>
+                        <input type="date" id="return-date" style="font-size:1rem">
+                    </div>
+                </div>
+                <div id="trip-days-badge"
+                    style="display:none;margin-bottom:1.2rem;padding:10px 18px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:.95rem;font-weight:600;color:var(--primary)">
+                </div>
+                <button class="btn btn-primary btn-full" onclick="startPlanning()">🚀 여행 계획 시작하기</button>
+            </div>
+        </div>
+
+        <!-- ========= RECOMMENDATION ========= -->
+        <div id="page-recommend" class="page">
+            <p class="page-title">여행지 추천 엔진</p>
+            <p class="page-sub">여행 스타일을 선택하면 소셜 빅데이터 분석을 통해 최적의 여행지를 추천합니다.</p>
+
+            <div class="glass" style="margin-bottom:2rem">
+                <h3 style="margin-bottom:1.2rem;font-size:1.1rem">나의 여행 스타일은?</h3>
+                <div id="style-btns" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem">
+                    <button class="btn btn-outline btn-tag btn-sm" data-style="healing" onclick="toggleStyle(this)">🌿
+                        조용한 힐링</button>
+                    <button class="btn btn-outline btn-tag btn-sm" data-style="extreme" onclick="toggleStyle(this)">🏄
+                        익스트림 액티비티</button>
+                    <button class="btn btn-outline btn-tag btn-sm" data-style="food" onclick="toggleStyle(this)">🍜 미식
+                        탐방</button>
+                    <button class="btn btn-outline btn-tag btn-sm" data-style="budget" onclick="toggleStyle(this)">💰 예산
+                        절약형</button>
+                    <button class="btn btn-outline btn-tag btn-sm" data-style="culture" onclick="toggleStyle(this)">🏛️
+                        문화 &amp; 역사</button>
+                </div>
+                <button class="btn btn-primary" id="analyze-btn" onclick="analyzeStyles()">🔍 분석하여 추천받기</button>
+            </div>
+
+            <div id="rec-loading" style="display:none" class="loading">
+                <div class="spinner"></div>소셜 빅데이터 분석 중…&nbsp;<code
+                    style="color:var(--primary);font-size:.8rem">f = Σ(긍정×가중치 − 부정×가중치)</code>
+            </div>
+
+            <div id="rec-results" style="display:none">
+                <h3 style="margin-bottom:1.2rem">📍 상위 5개 추천 여행지</h3>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1.2rem"
+                    id="dest-grid"></div>
+            </div>
+        </div>
+
+        <!-- ========= TIMELINE ========= -->
+        <div id="page-timeline" class="page">
+            <p class="page-title">여행 타임라인</p>
+            <p class="page-sub" id="timeline-subtitle">여행지를 먼저 선택해 주세요.</p>
+
+            <!-- Pre-trip card -->
+            <div class="glass" style="margin-bottom:1.5rem" id="pretrip-sect">
+                <h3 style="margin-bottom:1.2rem;display:flex;align-items:center;gap:8px">⏰ 출발 전 준비 (Pre-trip)</h3>
+                <div class="timeline" id="pretrip-tl"></div>
+            </div>
+
+            <!-- Day Tabs -->
+            <div class="glass" id="day-planner-sect" style="display:none">
+                <div
+                    style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:10px">
+                    <h3 style="display:flex;align-items:center;gap:8px">� 일차별 코스 계획 <span class="chip chip-blue"
+                            id="tsp-badge">TSP 최적화</span></h3>
+                    <div id="day-tabs" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                </div>
+
+                <div class="grid-2" style="align-items:start">
+                    <!-- LEFT -->
+                    <div>
+                        <div style="margin-bottom:.8rem">
+                            <p style="font-size:.85rem;color:var(--muted);margin-bottom:.6rem">코스에 추가할 장소를 선택하세요 (TSP로
+                                최적 순서 자동 정렬)</p>
+                            <div id="poi-selector" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+                        </div>
+                        <div class="timeline" id="during-tl" style="margin-top:1rem">
+                            <p style="color:var(--muted);font-size:.9rem">POI를 위에서 선택해 주세요.</p>
+                        </div>
+                    </div>
+                    <!-- RIGHT: map -->
+                    <div>
+                        <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+                            <div id="leaflet-map" style="height:380px"></div>
+                        </div>
+                        <p style="color:var(--muted);font-size:.75rem;margin-top:.5rem">© OpenStreetMap contributors</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Placeholder when no dest selected -->
+            <div id="timeline-placeholder" class="glass" style="text-align:center;padding:3rem;display:none">
+                <div style="font-size:3rem;margin-bottom:1rem">🗺️</div>
+                <p style="color:var(--muted)">여행지 추천 탭에서 목적지를 선택하면<br>일차별 코스 계획 기능이 활성화됩니다.</p>
+            </div>
+        </div>
+
+        <!-- ========= BUDGET ========= -->
+        <div id="page-budget" class="page">
+            <p class="page-title">경비 관리</p>
+            <p class="page-sub">TravelBank 예측 로직으로 초기 예산을 산출하고, SUMIF 로직으로 카테고리별 경비를 실시간 합산합니다.</p>
+
+            <div class="grid-3" style="margin-bottom:2rem">
+                <div class="glass stat-card">
+                    <div class="stat-icon" style="background:rgba(99,102,241,.18)">💼</div>
+                    <div>
+                        <div class="stat-label">예측 총 예산</div>
+                        <div class="stat-val" id="budget-total">₩0</div>
+                    </div>
+                </div>
+                <div class="glass stat-card">
+                    <div class="stat-icon" style="background:rgba(236,72,153,.18)">📉</div>
+                    <div>
+                        <div class="stat-label">지출 합계 (SUMIF)</div>
+                        <div class="stat-val" id="budget-spent">₩0</div>
+                    </div>
+                </div>
+                <div class="glass stat-card" id="balance-card">
+                    <div class="stat-icon" style="background:rgba(16,185,129,.18)">💰</div>
+                    <div>
+                        <div class="stat-label">잔여 예산</div>
+                        <div class="stat-val" id="budget-balance">₩0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2" style="align-items:start">
+                <!-- Add form -->
+                <div class="glass">
+                    <h3 style="margin-bottom:1.2rem">경비 추가</h3>
+                    <div class="field"><label>항목명</label><input type="text" id="exp-name" placeholder="예: 제주 숙소"></div>
+                    <div class="form-row">
+                        <div class="field"><label>금액 (원)</label><input type="number" id="exp-amount" placeholder="0">
+                        </div>
+                        <div class="field">
+                            <label>카테고리</label>
+                            <select id="exp-cat">
+                                <option>교통</option>
+                                <option>식비</option>
+                                <option>숙박</option>
+                                <option>레저</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-full" onclick="addExpense()">+ 경비 추가</button>
+
+                    <!-- Category breakdown -->
+                    <div style="margin-top:2rem">
+                        <h4 style="margin-bottom:1rem;color:var(--muted);font-size:.9rem">카테고리별 합산 (SUMIF 로직)</h4>
+                        <div id="cat-bars"></div>
+                    </div>
+                </div>
+
+                <!-- Expense list -->
+                <div class="glass">
+                    <h3 style="margin-bottom:1.2rem">지출 내역</h3>
+                    <div id="exp-list">
+                        <p style="color:var(--muted)">아직 입력된 경비가 없습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- WARNING MODAL -->
+    <div class="modal-overlay" id="warn-modal">
+        <div class="modal">
+            <div class="modal-icon">⚠️</div>
+            <h3>주의사항 알림</h3>
+            <p id="warn-msg">이 장소는 부정적인 리뷰 비율이 높습니다. 방문 전 최신 정보를 확인하세요.</p>
+            <button class="btn btn-primary" onclick="closeWarn()">확인했습니다</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  STATE
+        // ============================================================
+        const state = {
+            travelDate: null,
+            returnDate: null,
+            tripDays: 3,
+            activeDay: 1,
+            dayPOIs: {},
+            selectedDest: null,
+            selectedStyles: new Set(),
+            selectedPOIs: [],
+            expenses: [
+                { id: 1, name: '항공권', amount: 180000, cat: '교통', date: '2026-04-01' },
+                { id: 2, name: '호텔 예약', amount: 320000, cat: '숙박', date: '2026-04-02' }
+            ],
+            budget: 2000000,
+            map: null,
+            mapLayer: null
+        };
+
+        const CATS = ['교통', '식비', '숙박', '레저'];
+
+        const DESTINATIONS = [
+            // ── 국내 ──
+            {
+                id: 1, name: '제주도', region: '🇰🇷 국내', desc: '화산지형, 오름, 해변과 미식이 공존하는 힐링 천국',
+                positive: 940, negative: 60, lat: 33.35, lng: 126.53,
+                styles: ['healing', 'food', 'culture'],
+                img: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '성산일출봉', lat: 33.46, lng: 126.94, neg: 8 },
+                    { id: 2, name: '한라산 등반', lat: 33.36, lng: 126.53, neg: 35 },
+                    { id: 3, name: '동문시장', lat: 33.51, lng: 126.52, neg: 10 },
+                    { id: 4, name: '흑돼지 식당', lat: 33.49, lng: 126.50, neg: 5 },
+                    { id: 5, name: '협재 해수욕장', lat: 33.39, lng: 126.24, neg: 7 },
+                    { id: 6, name: '우도 자전거 투어', lat: 33.51, lng: 126.95, neg: 9 },
+                    { id: 7, name: '천지연 폭포', lat: 33.24, lng: 126.55, neg: 14 },
+                    { id: 8, name: '비자림 숲길 트레킹', lat: 33.48, lng: 126.79, neg: 6 },
+                    { id: 9, name: '오설록 차밭', lat: 33.30, lng: 126.29, neg: 11 },
+                    { id: 10, name: '섭지코지 해안 뷰', lat: 33.44, lng: 126.93, neg: 5 }
+                ]
+            },
+            {
+                id: 2, name: '부산', region: '🇰🇷 국내', desc: '역동적인 해변, 신선한 해산물, 독특한 문화 명소',
+                positive: 860, negative: 140, lat: 35.10, lng: 129.02,
+                styles: ['food', 'extreme', 'culture'],
+                img: 'https://images.unsplash.com/photo-1613223041935-717d23f73656?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '해운대 해변', lat: 35.16, lng: 129.16, neg: 12 },
+                    { id: 2, name: '광안리 & 광안대교 야경', lat: 35.15, lng: 129.12, neg: 8 },
+                    { id: 3, name: '자갈치 시장 해산물', lat: 35.09, lng: 129.03, neg: 15 },
+                    { id: 4, name: '감천 문화마을', lat: 35.10, lng: 129.01, neg: 20 },
+                    { id: 5, name: '이기대 공원 트레킹', lat: 35.12, lng: 129.10, neg: 6 },
+                    { id: 6, name: '부산 국제시장', lat: 35.10, lng: 129.02, neg: 18 },
+                    { id: 7, name: '용두산 공원 & 부산타워', lat: 35.10, lng: 129.03, neg: 10 },
+                    { id: 8, name: '해동 용궁사', lat: 35.19, lng: 129.22, neg: 22 },
+                    { id: 9, name: '송도 해수욕장 케이블카', lat: 35.07, lng: 128.99, neg: 13 },
+                    { id: 10, name: '영도 흰여울 문화마을', lat: 35.07, lng: 129.03, neg: 9 }
+                ]
+            },
+            {
+                id: 3, name: '서울', region: '🇰🇷 국내', desc: '전통과 현대가 어우러진 역동적인 수도',
+                positive: 800, negative: 200, lat: 37.57, lng: 126.97,
+                styles: ['culture', 'food', 'budget'],
+                img: 'https://images.unsplash.com/photo-1538485399081-7191377e8241?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '경복궁', lat: 37.58, lng: 126.97, neg: 18 },
+                    { id: 2, name: '북촌 한옥마을', lat: 37.58, lng: 126.98, neg: 22 },
+                    { id: 3, name: '명동 먹자골목', lat: 37.56, lng: 126.98, neg: 10 },
+                    { id: 4, name: 'N서울타워', lat: 37.55, lng: 126.99, neg: 14 },
+                    { id: 5, name: '광장시장', lat: 37.57, lng: 126.99, neg: 9 },
+                    { id: 6, name: '홍대 클럽 & 인디 음악', lat: 37.55, lng: 126.92, neg: 20 },
+                    { id: 7, name: '인사동 전통 공예', lat: 37.57, lng: 126.98, neg: 12 },
+                    { id: 8, name: '동대문 디자인 플라자', lat: 37.57, lng: 127.01, neg: 16 },
+                    { id: 9, name: '한강 반포 야경 크루즈', lat: 37.51, lng: 126.99, neg: 8 },
+                    { id: 10, name: '창덕궁 후원', lat: 37.58, lng: 126.99, neg: 11 }
+                ]
+            },
+            {
+                id: 4, name: '강원도 속초·양양', region: '🇰🇷 국내', desc: '설악산 트레킹, 서핑, 신선한 해산물 라면',
+                positive: 870, negative: 130, lat: 38.20, lng: 128.59,
+                styles: ['extreme', 'healing', 'food'],
+                img: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '설악산 공룡능선 등반', lat: 38.12, lng: 128.46, neg: 20 },
+                    { id: 2, name: '양양 죽도 서핑', lat: 38.07, lng: 128.63, neg: 8 },
+                    { id: 3, name: '속초 중앙시장', lat: 38.20, lng: 128.59, neg: 12 },
+                    { id: 4, name: '청초호 일몰 카페', lat: 38.20, lng: 128.58, neg: 5 },
+                    { id: 5, name: '대청봉 & 권금성 케이블카', lat: 38.16, lng: 128.45, neg: 30 },
+                    { id: 6, name: '낙산사 해돋이', lat: 38.12, lng: 128.63, neg: 10 },
+                    { id: 7, name: '하조대 등대', lat: 38.09, lng: 128.62, neg: 6 },
+                    { id: 8, name: '인구해변 서핑 스쿨', lat: 38.08, lng: 128.62, neg: 7 },
+                    { id: 9, name: '속초 생선 라면 맛집', lat: 38.20, lng: 128.59, neg: 9 },
+                    { id: 10, name: '영금정 일출 포인트', lat: 38.21, lng: 128.59, neg: 4 }
+                ]
+            },
+            {
+                id: 5, name: '경주', region: '🇰🇷 국내', desc: '천년 신라의 수도, 불국사와 석굴암의 문화유산',
+                positive: 830, negative: 170, lat: 35.85, lng: 129.22,
+                styles: ['culture', 'healing', 'budget'],
+                img: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '불국사', lat: 35.79, lng: 129.33, neg: 15 },
+                    { id: 2, name: '석굴암', lat: 35.79, lng: 129.35, neg: 10 },
+                    { id: 3, name: '동궁과 월지 야경', lat: 35.83, lng: 129.22, neg: 8 },
+                    { id: 4, name: '황리단길 카페 투어', lat: 35.83, lng: 129.21, neg: 12 },
+                    { id: 5, name: '첨성대', lat: 35.84, lng: 129.22, neg: 6 },
+                    { id: 6, name: '대릉원 & 천마총', lat: 35.83, lng: 129.22, neg: 9 },
+                    { id: 7, name: '국립경주박물관', lat: 35.83, lng: 129.22, neg: 7 },
+                    { id: 8, name: '양동 마을 한옥 체험', lat: 35.93, lng: 129.24, neg: 13 },
+                    { id: 9, name: '보문 호수 자전거', lat: 35.85, lng: 129.28, neg: 5 },
+                    { id: 10, name: '경주 빵 카페 골목', lat: 35.84, lng: 129.21, neg: 4 }
+                ]
+            },
+            // ── 해외 (아시아) ──
+            {
+                id: 6, name: '오키나와', region: '🇯🇵 일본', desc: '에메랄드빛 산호초 바다, 류큐 문화, 리조트 힐링',
+                positive: 920, negative: 80, lat: 26.33, lng: 127.80,
+                styles: ['healing', 'extreme', 'food'],
+                img: 'https://images.unsplash.com/photo-1590073844006-33379778ae09?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '츄라우미 수족관', lat: 26.69, lng: 127.88, neg: 12 },
+                    { id: 2, name: '만자 모리 해변 스노클링', lat: 26.50, lng: 127.87, neg: 5 },
+                    { id: 3, name: '류큐 왕국 슈리조', lat: 26.21, lng: 127.72, neg: 18 },
+                    { id: 4, name: '국제거리 음식투어', lat: 26.21, lng: 127.69, neg: 8 },
+                    { id: 5, name: '코우리 섬 드라이브', lat: 26.72, lng: 128.00, neg: 6 },
+                    { id: 6, name: '나하 마키시 공설시장', lat: 26.21, lng: 127.69, neg: 10 },
+                    { id: 7, name: '이라부 섬 다이빙', lat: 24.83, lng: 125.13, neg: 7 },
+                    { id: 8, name: '오키나와 월드 동굴', lat: 26.13, lng: 127.77, neg: 14 },
+                    { id: 9, name: '류큐 무라 전통 공연', lat: 26.45, lng: 127.77, neg: 11 },
+                    { id: 10, name: '나미노우에 해변 석양', lat: 26.22, lng: 127.68, neg: 6 }
+                ]
+            },
+            {
+                id: 7, name: '도쿄', region: '🇯🇵 일본', desc: '최첨단 트렌드와 전통 문화의 완벽한 조화',
+                positive: 880, negative: 120, lat: 35.68, lng: 139.69,
+                styles: ['food', 'culture', 'extreme'],
+                img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '시부야 스크램블', lat: 35.66, lng: 139.70, neg: 25 },
+                    { id: 2, name: '신주쿠 이자카야 골목', lat: 35.69, lng: 139.70, neg: 10 },
+                    { id: 3, name: '아사쿠사 센소지', lat: 35.71, lng: 139.79, neg: 18 },
+                    { id: 4, name: '도요스 시장 새벽 경매', lat: 35.64, lng: 139.78, neg: 20 },
+                    { id: 5, name: '하라주쿠 타케시타거리', lat: 35.67, lng: 139.70, neg: 15 },
+                    { id: 6, name: '아키하바라 전자상가', lat: 35.70, lng: 139.77, neg: 12 },
+                    { id: 7, name: '우에노 국립박물관', lat: 35.72, lng: 139.77, neg: 8 },
+                    { id: 8, name: '도쿄 스카이트리', lat: 35.71, lng: 139.81, neg: 22 },
+                    { id: 9, name: '요요기 공원 피크닉', lat: 35.67, lng: 139.69, neg: 6 },
+                    { id: 10, name: '신바시 立ち飲み 바 투어', lat: 35.67, lng: 139.76, neg: 11 }
+                ]
+            },
+            {
+                id: 8, name: '방콕', region: '🇹🇭 태국', desc: '왕궁·사원·길거리 미식, 활기찬 나이트라이프',
+                positive: 900, negative: 100, lat: 13.75, lng: 100.52,
+                styles: ['food', 'culture', 'budget'],
+                img: 'https://images.unsplash.com/photo-1508009603885-50cf7c579365?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '왓 프라깨우 (에메랄드 사원)', lat: 13.75, lng: 100.49, neg: 20 },
+                    { id: 2, name: '짜뚜짝 주말시장', lat: 13.80, lng: 100.55, neg: 15 },
+                    { id: 3, name: '팟타이 맛집 골목', lat: 13.74, lng: 100.50, neg: 8 },
+                    { id: 4, name: '차오프라야 강 크루즈', lat: 13.74, lng: 100.49, neg: 10 },
+                    { id: 5, name: '카오산 로드 나이트라이프', lat: 13.76, lng: 100.50, neg: 30 },
+                    { id: 6, name: '씨얌 파라곤 쇼핑몰', lat: 13.75, lng: 100.53, neg: 12 },
+                    { id: 7, name: '왓 포 와불 사원', lat: 13.75, lng: 100.49, neg: 16 },
+                    { id: 8, name: '암파와 수상시장', lat: 13.43, lng: 99.97, neg: 18 },
+                    { id: 9, name: '루프탑 바 스카이뷰', lat: 13.74, lng: 100.52, neg: 14 },
+                    { id: 10, name: '마사지 거리 스파', lat: 13.75, lng: 100.51, neg: 7 }
+                ]
+            },
+            {
+                id: 9, name: '발리', region: '🇮🇩 인도네시아', desc: '신들의 섬 – 서핑, 요가, 논밭 힐링, 힌두 사원',
+                positive: 930, negative: 70, lat: -8.34, lng: 115.09,
+                styles: ['healing', 'extreme', 'culture'],
+                img: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '우붓 라이스 테라스 트레킹', lat: -8.43, lng: 115.27, neg: 8 },
+                    { id: 2, name: '쿠타 서핑 포인트', lat: -8.72, lng: 115.17, neg: 20 },
+                    { id: 3, name: '탄가하 피누 사원', lat: -8.50, lng: 115.17, neg: 12 },
+                    { id: 4, name: '스미냑 선셋 바', lat: -8.69, lng: 115.15, neg: 18 },
+                    { id: 5, name: '우붓 전통 요가 리트리트', lat: -8.50, lng: 115.26, neg: 6 },
+                    { id: 6, name: '뭉향 폭포 트레킹', lat: -8.27, lng: 115.14, neg: 10 },
+                    { id: 7, name: '우붓 원숭이 숲', lat: -8.52, lng: 115.26, neg: 15 },
+                    { id: 8, name: '누사 페니다 스노클링', lat: -8.73, lng: 115.54, neg: 9 },
+                    { id: 9, name: '발리 쿠킹 클래스', lat: -8.50, lng: 115.26, neg: 5 },
+                    { id: 10, name: '짐 바란 선셋 씨푸드', lat: -8.74, lng: 115.17, neg: 11 }
+                ]
+            },
+            {
+                id: 10, name: '하노이', region: '🇻🇳 베트남', desc: '쌀국수·반미·커피, 프랑스풍 골목, 저렴하고 풍부한 여행',
+                positive: 850, negative: 150, lat: 21.03, lng: 105.85,
+                styles: ['food', 'budget', 'culture'],
+                img: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '호안끼엠 호수', lat: 21.03, lng: 105.85, neg: 15 },
+                    { id: 2, name: '구시가지 음식 투어', lat: 21.03, lng: 105.85, neg: 8 },
+                    { id: 3, name: '문묘 (반 묘)', lat: 21.02, lng: 105.84, neg: 10 },
+                    { id: 4, name: '에그 커피 카페', lat: 21.03, lng: 105.85, neg: 5 },
+                    { id: 5, name: '하롱베이 크루즈 (당일)', lat: 20.91, lng: 107.18, neg: 22 },
+                    { id: 6, name: '탕 롱 유적 황성', lat: 21.03, lng: 105.84, neg: 12 },
+                    { id: 7, name: '호치민 도서관 & 묘소', lat: 21.04, lng: 105.84, neg: 9 },
+                    { id: 8, name: '구시가 36거리 자전거 투어', lat: 21.03, lng: 105.85, neg: 7 },
+                    { id: 9, name: '닥 람 반미 맛집', lat: 21.03, lng: 105.85, neg: 4 },
+                    { id: 10, name: '하노이 오페라 하우스', lat: 21.02, lng: 105.86, neg: 8 }
+                ]
+            },
+            // ── 해외 (유럽) ──
+            {
+                id: 11, name: '파리', region: '🇫🇷 프랑스', desc: '에펠탑, 루브르, 세계 최고의 미식 도시',
+                positive: 870, negative: 130, lat: 48.86, lng: 2.35,
+                styles: ['culture', 'food', 'healing'],
+                img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '에펠탑 & 트로카데로 가든', lat: 48.86, lng: 2.29, neg: 30 },
+                    { id: 2, name: '루브르 박물관', lat: 48.86, lng: 2.33, neg: 20 },
+                    { id: 3, name: '몽마르트르 언덕 & 사크레쾨르', lat: 48.88, lng: 2.34, neg: 15 },
+                    { id: 4, name: '마레 지구 파티스리 투어', lat: 48.85, lng: 2.36, neg: 8 },
+                    { id: 5, name: '센강 바토-무쉬 유람선', lat: 48.86, lng: 2.31, neg: 12 },
+                    { id: 6, name: '오르세 미술관', lat: 48.86, lng: 2.33, neg: 18 },
+                    { id: 7, name: '샹젤리제 & 개선문', lat: 48.87, lng: 2.30, neg: 22 },
+                    { id: 8, name: '베르사유 궁전 당일 투어', lat: 48.80, lng: 2.12, neg: 28 },
+                    { id: 9, name: '피카소 미술관', lat: 48.86, lng: 2.35, neg: 10 },
+                    { id: 10, name: '파리 지하 카타콩브', lat: 48.83, lng: 2.33, neg: 16 }
+                ]
+            },
+            {
+                id: 12, name: '바르셀로나', region: '🇪🇸 스페인', desc: '가우디 건축, 지중해 해변, 타파스와 와인',
+                positive: 900, negative: 100, lat: 41.39, lng: 2.17,
+                styles: ['culture', 'food', 'healing'],
+                img: 'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '사그라다 파밀리아', lat: 41.40, lng: 2.17, neg: 22 },
+                    { id: 2, name: '바르셀로네타 해변', lat: 41.38, lng: 2.19, neg: 20 },
+                    { id: 3, name: '보케리아 시장', lat: 41.38, lng: 2.17, neg: 18 },
+                    { id: 4, name: '구엘 공원', lat: 41.41, lng: 2.15, neg: 25 },
+                    { id: 5, name: '고딕 지구 타파스 투어', lat: 41.38, lng: 2.17, neg: 10 },
+                    { id: 6, name: '카사 바트요', lat: 41.39, lng: 2.16, neg: 19 },
+                    { id: 7, name: '몬주익 성채 케이블카', lat: 41.36, lng: 2.16, neg: 12 },
+                    { id: 8, name: '피카소 미술관', lat: 41.38, lng: 2.18, neg: 14 },
+                    { id: 9, name: '그라시아 지구 쇼핑', lat: 41.40, lng: 2.16, neg: 8 },
+                    { id: 10, name: '플라멩코 나이트쇼', lat: 41.38, lng: 2.17, neg: 9 }
+                ]
+            },
+            {
+                id: 13, name: '아이슬란드', region: '🇮🇸 아이슬란드', desc: '오로라, 빙하 트레킹, 폭포, 지구 끝 비일상 모험',
+                positive: 950, negative: 50, lat: 64.13, lng: -21.93,
+                styles: ['extreme', 'healing'],
+                img: 'https://images.unsplash.com/photo-1529963183134-61a90db47eaf?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '블루라군 온천', lat: 63.88, lng: -22.45, neg: 25 },
+                    { id: 2, name: '바트나요쿨 빙하 트레킹', lat: 64.00, lng: -16.97, neg: 10 },
+                    { id: 3, name: '굴포스 폭포', lat: 64.33, lng: -20.12, neg: 8 },
+                    { id: 4, name: '레이캬비크 구시가', lat: 64.14, lng: -21.93, neg: 6 },
+                    { id: 5, name: '스카프타펠 빙하 하이킹', lat: 64.02, lng: -17.00, neg: 15 },
+                    { id: 6, name: '셀야란드스포스 폭포', lat: 63.62, lng: -19.99, neg: 9 },
+                    { id: 7, name: '캬우라우포스 오로라 포인트', lat: 65.68, lng: -17.55, neg: 7 },
+                    { id: 8, name: '요쿨살론 빙하 호수', lat: 64.04, lng: -16.18, neg: 10 },
+                    { id: 9, name: '스나이펠스네스 반도', lat: 64.83, lng: -23.77, neg: 11 },
+                    { id: 10, name: '고다포스 폭포 드라이브', lat: 65.68, lng: -17.55, neg: 8 }
+                ]
+            },
+            {
+                id: 14, name: '하와이 (마우이)', region: '🇺🇸 미국', desc: '화산 절경, 루아우 문화, 스노클링과 고래 관찰',
+                positive: 920, negative: 80, lat: 20.80, lng: -156.33,
+                styles: ['healing', 'extreme', 'food'],
+                img: 'https://images.unsplash.com/photo-1542259009477-d625272157b7?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '할레아칼라 화산 일출', lat: 20.71, lng: -156.25, neg: 10 },
+                    { id: 2, name: '몰로키니 스노클링', lat: 20.63, lng: -156.50, neg: 8 },
+                    { id: 3, name: '라하이나 올드타운', lat: 20.87, lng: -156.68, neg: 15 },
+                    { id: 4, name: '로드 투 하나 드라이브', lat: 20.75, lng: -156.00, neg: 12 },
+                    { id: 5, name: '카아나팔리 해변', lat: 20.93, lng: -156.69, neg: 6 },
+                    { id: 6, name: '마우이 루아우 & 폴리네시안쇼', lat: 20.89, lng: -156.65, neg: 9 },
+                    { id: 7, name: '와이아나파나파 블랙샌드 해변', lat: 20.79, lng: -156.00, neg: 14 },
+                    { id: 8, name: '이아오 밸리 주립공원', lat: 20.88, lng: -156.54, neg: 7 },
+                    { id: 9, name: '파이아 타운 서핑 마을', lat: 20.92, lng: -156.37, neg: 5 },
+                    { id: 10, name: '고래 관찰 크루즈', lat: 20.80, lng: -156.60, neg: 11 }
+                ]
+            },
+            {
+                id: 15, name: '뉴질랜드 퀸즈타운', region: '🇳🇿 뉴질랜드', desc: '번지점프 성지, 피오르드, 스키 리조트',
+                positive: 940, negative: 60, lat: -45.03, lng: 168.66,
+                styles: ['extreme', 'healing'],
+                img: 'https://images.unsplash.com/photo-1507699622108-4be3abd695ad?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '카와라우 번지점프', lat: -45.03, lng: 168.74, neg: 8 },
+                    { id: 2, name: '밀포드 사운드 크루즈', lat: -44.62, lng: 167.89, neg: 10 },
+                    { id: 3, name: '리마커블스 스키장', lat: -45.07, lng: 168.80, neg: 12 },
+                    { id: 4, name: '와카티푸 호수 선셋 유람선', lat: -45.03, lng: 168.66, neg: 4 },
+                    { id: 5, name: '스카이다이빙 9000ft', lat: -45.00, lng: 168.70, neg: 6 },
+                    { id: 6, name: '샷오버 젯보트', lat: -45.01, lng: 168.73, neg: 9 },
+                    { id: 7, name: '아로타운 & 골드러시 역사마을', lat: -44.94, lng: 168.63, neg: 7 },
+                    { id: 8, name: '와나카 트리 & 호수 뷰', lat: -44.71, lng: 169.14, neg: 5 },
+                    { id: 9, name: '퀸즈타운 가든 산책', lat: -45.03, lng: 168.67, neg: 3 },
+                    { id: 10, name: '스키퍼스 캐년 4WD 투어', lat: -45.00, lng: 168.80, neg: 15 }
+                ]
+            },
+            {
+                id: 16, name: '두바이', region: '🇦🇪 UAE', desc: '세계 최고층 빌딩, 사막 사파리, 럭셔리 쇼핑',
+                positive: 890, negative: 110, lat: 25.20, lng: 55.27,
+                styles: ['extreme', 'food', 'culture'],
+                img: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '부르즈 할리파 전망대', lat: 25.19, lng: 55.27, neg: 20 },
+                    { id: 2, name: '사막 사파리 & 모래보드', lat: 24.90, lng: 55.50, neg: 12 },
+                    { id: 3, name: '두바이 몰 스케이트장', lat: 25.19, lng: 55.28, neg: 10 },
+                    { id: 4, name: '올드 두바이 알파하이디 수크', lat: 25.26, lng: 55.30, neg: 8 },
+                    { id: 5, name: '두바이 프레임', lat: 25.23, lng: 55.30, neg: 15 },
+                    { id: 6, name: '팜 주메이라 아틀란티스', lat: 25.13, lng: 55.12, neg: 18 },
+                    { id: 7, name: '부르즈 알아랍 런치', lat: 25.14, lng: 55.18, neg: 22 },
+                    { id: 8, name: '두바이 폴로 & 레이싱 클럽', lat: 25.17, lng: 55.31, neg: 9 },
+                    { id: 9, name: '두바이 크릭 아부럿 보트 투어', lat: 25.26, lng: 55.30, neg: 7 },
+                    { id: 10, name: 'JBR 비치 & 워터파크', lat: 25.08, lng: 55.13, neg: 13 }
+                ]
+            },
+            {
+                id: 17, name: '모로코 마라케시', region: '🇲🇦 모로코', desc: '미로 같은 메디나, 타진 요리, 사하라 사막 투어',
+                positive: 860, negative: 140, lat: 31.63, lng: -7.99,
+                styles: ['culture', 'food', 'extreme'],
+                img: 'https://images.unsplash.com/photo-1597212720455-fbf8e88bb94a?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '제마 엘프나 광장 야시장', lat: 31.63, lng: -7.99, neg: 30 },
+                    { id: 2, name: '수크 전통시장 투어', lat: 31.63, lng: -7.99, neg: 25 },
+                    { id: 3, name: '사하라 사막 1박 캠핑', lat: 31.09, lng: -3.98, neg: 10 },
+                    { id: 4, name: '타진 전통 음식 쿠킹 클래스', lat: 31.63, lng: -8.00, neg: 8 },
+                    { id: 5, name: '마조렐 정원 & 이브생로랑', lat: 31.64, lng: -8.00, neg: 15 },
+                    { id: 6, name: '쿠투비야 모스크', lat: 31.62, lng: -8.00, neg: 12 },
+                    { id: 7, name: '바히아 궁전', lat: 31.62, lng: -7.99, neg: 10 },
+                    { id: 8, name: '아틀라스 산맥 당일 투어', lat: 31.20, lng: -8.00, neg: 9 },
+                    { id: 9, name: '탄너리 (가죽 염색소) 방문', lat: 31.63, lng: -7.99, neg: 16 },
+                    { id: 10, name: '함맘 전통 목욕탕 체험', lat: 31.63, lng: -7.99, neg: 7 }
+                ]
+            },
+            {
+                id: 18, name: '싱가포르', region: '🇸🇬 싱가포르', desc: '마리나베이 야경, 호커센터 미식, 깔끔한 도시국가',
+                positive: 890, negative: 110, lat: 1.35, lng: 103.82,
+                styles: ['food', 'culture', 'budget'],
+                img: 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '마리나베이 샌즈 스카이파크', lat: 1.28, lng: 103.86, neg: 20 },
+                    { id: 2, name: '맥스웰 호커센터', lat: 1.28, lng: 103.84, neg: 8 },
+                    { id: 3, name: '가든스 바이 더 베이', lat: 1.28, lng: 103.86, neg: 12 },
+                    { id: 4, name: '클락 키 나이트라이프', lat: 1.29, lng: 103.85, neg: 18 },
+                    { id: 5, name: '차이나타운 푸드 스트리트', lat: 1.28, lng: 103.84, neg: 10 },
+                    { id: 6, name: '유니버설 스튜디오', lat: 1.25, lng: 103.82, neg: 22 },
+                    { id: 7, name: '아랍 스트리트 & 하지 레인', lat: 1.30, lng: 103.86, neg: 9 },
+                    { id: 8, name: '싱가포르 동물원 나이트 사파리', lat: 1.40, lng: 103.79, neg: 14 },
+                    { id: 9, name: '리틀 인디아 머스타파 센터', lat: 1.31, lng: 103.85, neg: 11 },
+                    { id: 10, name: '루팡 지하 수영장 벙커', lat: 1.27, lng: 103.80, neg: 7 }
+                ]
+            },
+            {
+                id: 19, name: '포르투', region: '🇵🇹 포르투갈', desc: '아줄레주 타일, 포트 와인, 도루강 뷰 & 저예산 유럽',
+                positive: 880, negative: 120, lat: 41.15, lng: -8.61,
+                styles: ['healing', 'food', 'budget', 'culture'],
+                img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '상 벤투 역 (아줄레주 타일)', lat: 41.15, lng: -8.61, neg: 10 },
+                    { id: 2, name: '가이아 와이너리 포트 와인 투어', lat: 41.14, lng: -8.61, neg: 8 },
+                    { id: 3, name: '루이스 1세 철교 전망대', lat: 41.14, lng: -8.61, neg: 12 },
+                    { id: 4, name: '렐루 서점 & 해리포터 계단', lat: 41.15, lng: -8.61, neg: 25 },
+                    { id: 5, name: '프란세시냐 맛집 카페 산티아고', lat: 41.15, lng: -8.62, neg: 5 },
+                    { id: 6, name: '세라우베스 미술관', lat: 41.16, lng: -8.65, neg: 7 },
+                    { id: 7, name: '리베이라 지구 선셋 유람선', lat: 41.14, lng: -8.61, neg: 9 },
+                    { id: 8, name: '볼량 시장 ( Mercado Bolhão)', lat: 41.15, lng: -8.61, neg: 6 },
+                    { id: 9, name: '클레리구스 타워 전망', lat: 41.15, lng: -8.61, neg: 10 },
+                    { id: 10, name: '포스두 도우루 대서양 해변', lat: 41.14, lng: -8.68, neg: 8 }
+                ]
+            },
+            {
+                id: 20, name: '코사무이', region: '🇹🇭 태국', desc: '순백의 해변, 코코넛 정원, 저렴한 마사지 천국',
+                positive: 910, negative: 90, lat: 9.55, lng: 100.06,
+                styles: ['healing', 'budget', 'food'],
+                img: 'https://images.unsplash.com/photo-1504214208698-ea1916a2195a?auto=format&fit=crop&q=80&w=700',
+                pois: [
+                    { id: 1, name: '촌부리 해변 & 선베드', lat: 9.54, lng: 100.06, neg: 8 },
+                    { id: 2, name: '앙통 해양국립공원 카약', lat: 9.79, lng: 100.02, neg: 10 },
+                    { id: 3, name: '타이 전통 마사지 2시간', lat: 9.53, lng: 100.06, neg: 5 },
+                    { id: 4, name: '밤시장 씨푸드 바비큐', lat: 9.53, lng: 100.06, neg: 6 },
+                    { id: 5, name: '나통 해변 스노클링', lat: 9.51, lng: 100.04, neg: 12 },
+                    { id: 6, name: '빅 부다 사원', lat: 9.57, lng: 100.06, neg: 9 },
+                    { id: 7, name: '은퇴 수도원 & 비밀 폭포 트레킹', lat: 9.53, lng: 100.05, neg: 11 },
+                    { id: 8, name: '코 타오 다이빙 (당일 투어)', lat: 10.10, lng: 99.84, neg: 14 },
+                    { id: 9, name: '라마이 해변 클럽 파티', lat: 9.48, lng: 100.06, neg: 22 },
+                    { id: 10, name: '코코넛 팜 선셋 루프탑', lat: 9.54, lng: 100.07, neg: 7 }
+                ]
+            }
+        ];
+
+
+
+        // ============================================================
+        //  NAVIGATION
+        // ============================================================
+        function showPage(name, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('page-' + name).classList.add('active');
+            if (btn) btn.classList.add('active');
+            if (name === 'timeline') initTimeline();
+            if (name === 'budget') initBudget();
+        }
+
+        // ============================================================
+        //  HOME
+        // ============================================================
+        // Live preview of trip duration
+        ['travel-date', 'return-date'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateDaysBadge);
+        });
+        function updateDaysBadge() {
+            const d = document.getElementById('travel-date').value;
+            const r = document.getElementById('return-date').value;
+            const badge = document.getElementById('trip-days-badge');
+            if (d && r) {
+                const diff = Math.round((new Date(r) - new Date(d)) / 86400000);
+                if (diff > 0) {
+                    badge.style.display = 'block';
+                    badge.textContent = `🗓️ 총 여행 기간: ${diff}박 ${diff + 1}일`;
+                } else {
+                    badge.style.display = 'block';
+                    badge.textContent = '⚠️ 복귀일은 출발일보다 늦어야 합니다';
+                    badge.style.color = 'var(--red)';
+                }
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function startPlanning() {
+            const d = document.getElementById('travel-date').value;
+            const r = document.getElementById('return-date').value;
+            if (!d) { alert('출발 날짜를 선택해 주세요.'); return; }
+            if (!r) { alert('복귀 날짜를 선택해 주세요.'); return; }
+            const dep = new Date(d + 'T09:00:00');
+            const ret = new Date(r + 'T21:00:00');
+            if (ret <= dep) { alert('복귀일은 출발일보다 늦어야 합니다.'); return; }
+            state.travelDate = dep;
+            state.returnDate = ret;
+            state.tripDays = Math.round((ret - dep) / 86400000);
+            showPage('recommend', document.querySelectorAll('.nav-btn')[1]);
+        }
+
+        // ============================================================
+        //  RECOMMENDATION ENGINE
+        // ============================================================
+        function toggleStyle(btn) {
+            const s = btn.dataset.style;
+            if (state.selectedStyles.has(s)) {
+                state.selectedStyles.delete(s);
+                btn.classList.remove('btn-selected');
+                btn.classList.add('btn-outline');
+            } else {
+                state.selectedStyles.add(s);
+                btn.classList.remove('btn-outline');
+                btn.classList.add('btn-selected');
+            }
+        }
+
+        function analyzeStyles() {
+            if (state.selectedStyles.size === 0) { alert('스타일을 최소 1개 선택해 주세요.'); return; }
+            document.getElementById('rec-results').style.display = 'none';
+            document.getElementById('rec-loading').style.display = 'flex';
+
+            setTimeout(() => {
+                document.getElementById('rec-loading').style.display = 'none';
+
+                const selectedArr = [...state.selectedStyles];
+
+                // Score: f = (positive*1.2 - negative*0.8) + styleMatchBonus
+                // styleMatchBonus = (matched style count / total styles) * 400 — strongly weights style affinity
+                const scored = DESTINATIONS.map(d => {
+                    const matchCount = d.styles.filter(s => selectedArr.includes(s)).length;
+                    const styleBonus = (matchCount / selectedArr.length) * 400;
+                    const baseScore = d.positive * 1.2 - d.negative * 0.8;
+                    const score = baseScore + styleBonus + (Math.random() * 20);
+                    return { ...d, score: Math.round(score), matchCount };
+                }).sort((a, b) => b.score - a.score);
+
+                const MEDALS = ['🥇', '🥈', '🥉', '4위', '5위'];
+                const grid = document.getElementById('dest-grid');
+                grid.innerHTML = '';
+                scored.slice(0, 5).forEach((dest, i) => {
+                    const matchLabel = dest.matchCount > 0
+                        ? `<span style="color:var(--green);font-size:.78rem;font-weight:600">✓ 스타일 ${dest.matchCount}/${dest.styles.length} 매칭</span>`
+                        : `<span style="color:var(--muted);font-size:.78rem">스타일 미매칭</span>`;
+                    grid.innerHTML += `
+        <div class="card dest-card" onclick="selectDest(${dest.id})">
+          <div class="dest-img" style="background-image:url('${dest.img}')">
+            <span style="position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);padding:3px 10px;border-radius:20px;font-size:.78rem;font-weight:600">${dest.region}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px;margin-top:4px">
+            <h4 style="font-size:1.05rem">${MEDALS[i]} ${dest.name}</h4>
+            <span class="dest-score">★ ${dest.score}</span>
+          </div>
+          <div style="margin-bottom:8px">${matchLabel}</div>
+          <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem">${dest.desc}</p>
+          <button class="btn btn-outline btn-sm" style="width:100%">이 여행지 선택하기</button>
+        </div>`;
+                });
+
+                // Fix card img position for the region label
+                document.querySelectorAll('.dest-img').forEach(el => el.style.position = 'relative');
+                document.getElementById('rec-results').style.display = 'block';
+            }, 1200);
+        }
+
+
+        function selectDest(id) {
+            state.selectedDest = DESTINATIONS.find(d => d.id === id);
+            // Reset per-day POI selections
+            const days = state.tripDays || 1;
+            state.dayPOIs = {};
+            for (let i = 1; i <= days; i++) state.dayPOIs[i] = [];
+            state.activeDay = 1;
+            // TravelBank budget prediction
+            const tripDays = state.tripDays || 3;
+            state.budget = 300000 * tripDays + id * 80000;
+            showPage('timeline', document.querySelectorAll('.nav-btn')[2]);
+        }
+
+        // ============================================================
+        //  STATE init for multi-day
+        // ============================================================
+        // ============================================================
+        //  TIMELINE
+        // ============================================================
+        function initTimeline() {
+            const preSect = document.getElementById('pretrip-sect');
+            const daySect = document.getElementById('day-planner-sect');
+            const ph = document.getElementById('timeline-placeholder');
+
+            if (!state.selectedDest) {
+                document.getElementById('timeline-subtitle').textContent = '여행지를 먼저 선택해 주세요.';
+                preSect.style.display = 'block';
+                document.getElementById('pretrip-tl').innerHTML = '<p style="color:var(--muted);font-size:.9rem">여행지 추천 탭에서 목적지를 선택하세요.</p>';
+                daySect.style.display = 'none';
+                return;
+            }
+
+            const depStr = state.travelDate ? state.travelDate.toLocaleDateString('ko-KR') : '?';
+            const retStr = state.returnDate ? state.returnDate.toLocaleDateString('ko-KR') : '?';
+            document.getElementById('timeline-subtitle').textContent =
+                `${state.selectedDest.region} ${state.selectedDest.name} | ${depStr} ~ ${retStr} | ${state.tripDays || 1}박 ${(state.tripDays || 1) + 1}일`;
+
+            preSect.style.display = 'block';
+            daySect.style.display = 'block';
+            renderPreTrip();
+            buildDayTabs();
+            initMap();
+        }
+
+        function buildDayTabs() {
+            const days = state.tripDays || 1;
+            if (!state.dayPOIs) {
+                state.dayPOIs = {};
+                for (let i = 1; i <= days; i++) state.dayPOIs[i] = [];
+            }
+            if (!state.activeDay) state.activeDay = 1;
+
+            const tabsEl = document.getElementById('day-tabs');
+            tabsEl.innerHTML = '';
+            for (let d = 1; d <= days + 1; d++) {
+                const label = d <= days ? `Day ${d}` : `Day ${d} (귀국일)`;
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-sm ' + (d === state.activeDay ? 'btn-primary' : 'btn-outline');
+                btn.textContent = label;
+                btn.onclick = () => switchDay(d);
+                tabsEl.appendChild(btn);
+            }
+            renderPOISelector();
+        }
+
+        function switchDay(d) {
+            state.activeDay = d;
+            buildDayTabs();
+            renderDuringTrip();
+            updateMap();
+        }
+
+        function renderPreTrip() {
+            const tl = document.getElementById('pretrip-tl');
+            const today = new Date();
+            const days = state.travelDate ? Math.ceil((state.travelDate - today) / 86400000) : 0;
+
+            const items = [];
+            if (days >= 60) items.push({ day: 'D-60', title: '✈️ 항공권 예약', desc: '예측 로직 기준 최저가 예약 타이밍 (TravelBank)' });
+            if (days >= 30) items.push({ day: 'D-30', title: '🏨 인기 숙소 예약', desc: '조기 매진 예상 숙소 우선 예약' });
+            if (days >= 14) items.push({ day: 'D-14', title: '🎟️ 입장권 · 투어 예약', desc: '인기 관광지 사전 예약 권장' });
+            if (days >= 7) items.push({ day: 'D-7', title: '🧳 짐 싸기 체크리스트', desc: '날씨 확인, 필수품 점검' });
+            items.push({ day: 'D-1', title: '📋 최종 점검', desc: '서류·예약·환전 최종 확인' });
+
+            tl.innerHTML = items.map(it => `
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-day">${it.day}</div>
+      <div class="tl-title">${it.title}</div>
+      <div class="tl-desc">${it.desc}</div>
+    </div>`).join('');
+        }
+
+        function renderPOISelector() {
+            const day = state.activeDay || 1;
+            const allPOIs = state.selectedDest.pois;
+            const selectedForDay = state.dayPOIs[day] || [];
+
+            const sel = document.getElementById('poi-selector');
+            sel.innerHTML = allPOIs.map(p => {
+                const isSelected = selectedForDay.some(s => s.id === p.id);
+                return `<button class="btn btn-sm ${isSelected ? 'btn-selected' : 'btn-outline'}"
+                    id="poi-btn-${p.id}" onclick="togglePOI(${p.id})">
+                    ${isSelected ? '✓' : '+'} ${p.name}
+                </button>`;
+            }).join('');
+            renderDuringTrip();
+        }
+
+        function togglePOI(id) {
+            const day = state.activeDay || 1;
+            const poi = state.selectedDest.pois.find(p => p.id === id);
+            const dayArr = state.dayPOIs[day] || [];
+            const idx = dayArr.findIndex(p => p.id === id);
+            if (idx >= 0) {
+                dayArr.splice(idx, 1);
+            } else {
+                if (poi.neg > 30) showWarn(poi.name);
+                dayArr.push(poi);
+            }
+            state.dayPOIs[day] = dayArr;
+            renderPOISelector();
+            renderDuringTrip();
+            updateMap();
+        }
+
+        // ---- TSP Nearest Neighbor ----
+        function calcDist(a, b) {
+            const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lng - a.lng) * Math.PI / 180;
+            const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+        }
+
+        function runTSP(pois) {
+            if (pois.length <= 1) return [...pois];
+            const unvisited = [...pois], sorted = [];
+            let cur = unvisited.shift();
+            sorted.push(cur);
+            while (unvisited.length) {
+                let best = 0, bestD = Infinity;
+                unvisited.forEach((p, i) => { const d = calcDist(cur, p); if (d < bestD) { bestD = d; best = i; } });
+                cur = unvisited.splice(best, 1)[0];
+                sorted.push(cur);
+            }
+            return sorted;
+        }
+
+        const SLOTS = ['오전 (09:00)', '점심 (12:00)', '오후 (14:00)', '커피 휴식 (16:00)', '저녁 (19:00)', '나이트 (21:00)'];
+
+        function renderDuringTrip() {
+            const tl = document.getElementById('during-tl');
+            const day = state.activeDay || 1;
+            const dayPOIs = (state.dayPOIs && state.dayPOIs[day]) ? state.dayPOIs[day] : [];
+            const days = state.tripDays || 1;
+            const isReturnDay = day > days;
+
+            if (isReturnDay) {
+                tl.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted)">
+                    <div style="font-size:2rem;margin-bottom:.5rem">✈️</div>
+                    <p>귀국일입니다. 공항 이동 및 체크인 시간을 여유있게 계획하세요.</p>
+                    <p style="margin-top:.5rem;font-size:.85rem">🕗 08:00 짐 정리 → 🚕 공항 이동 → ✈️ 탑승 수속</p>
+                </div>`;
+                return;
+            }
+
+            if (dayPOIs.length === 0) {
+                tl.innerHTML = '<p style="color:var(--muted);font-size:.9rem">위에서 장소를 선택해 주세요.</p>';
+                return;
+            }
+            const sorted = runTSP(dayPOIs);
+            const depDate = state.travelDate ? new Date(state.travelDate) : new Date();
+            depDate.setDate(depDate.getDate() + day - 1);
+            const dateLabel = depDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+
+            tl.innerHTML = `<div style="font-size:.8rem;color:var(--primary);font-weight:700;margin-bottom:.8rem">📅 Day ${day} — ${dateLabel}</div>` +
+                sorted.map((p, i) => {
+                    const nextDist = i < sorted.length - 1 ? calcDist(p, sorted[i + 1]).toFixed(1) : null;
+                    return `
+                    <div class="tl-item tl-pink">
+                        <div class="tl-dot tl-dot-pink"></div>
+                        <div class="tl-day">${SLOTS[i % SLOTS.length]}</div>
+                        <div class="tl-title">${p.name}</div>
+                        ${p.neg > 30 ? `<div class="tl-warning">⚠️ 부정 리뷰 ${p.neg}% – 확인 권장</div>` : ''}
+                        ${nextDist ? `<div class="tl-desc" style="margin-top:4px;border-left:2px dashed rgba(255,255,255,.12);padding-left:8px">↓ ${nextDist} km 이동</div>` : ''}
+                    </div>`;
+                }).join('');
+        }
+
+        // ============================================================
+        //  LEAFLET MAP
+        // ============================================================
+        function initMap() {
+            const center = state.selectedDest ? [state.selectedDest.lat, state.selectedDest.lng] : [36.5, 127.5];
+            if (!state.map) {
+                state.map = L.map('leaflet-map').setView(center, 9);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(state.map);
+            } else {
+                state.map.setView(center, 9);
+            }
+            // Always invalidate size after tab switch
+            setTimeout(() => state.map.invalidateSize(), 100);
+            if (state.mapLayer) state.map.removeLayer(state.mapLayer);
+            state.mapLayer = L.layerGroup();
+            if (state.selectedDest) {
+                state.selectedDest.pois.forEach(p => {
+                    L.marker([p.lat, p.lng]).addTo(state.mapLayer)
+                        .bindPopup(`<b>${p.name}</b><br>부정 리뷰: ${p.neg}%`);
+                });
+            }
+            state.mapLayer.addTo(state.map);
+            updateMap();
+        }
+
+        function updateMap() {
+            if (!state.map) return;
+            if (state._routeLayer) state.map.removeLayer(state._routeLayer);
+            const day = state.activeDay || 1;
+            const dayPOIs = (state.dayPOIs && state.dayPOIs[day]) ? state.dayPOIs[day] : [];
+            if (dayPOIs.length > 1) {
+                const sorted = runTSP(dayPOIs);
+                const coords = sorted.map(p => [p.lat, p.lng]);
+                state._routeLayer = L.polyline(coords, { color: '#ec4899', weight: 3, dashArray: '10,8', opacity: .85 }).addTo(state.map);
+                state.map.fitBounds(state._routeLayer.getBounds(), { padding: [30, 30] });
+            }
+        }
+
+        // ============================================================
+        //  BUDGET
+        // ============================================================
+        function initBudget() {
+            document.getElementById('budget-total').textContent = '₩' + state.budget.toLocaleString();
+            renderExpenses();
+        }
+
+        function addExpense() {
+            const name = document.getElementById('exp-name').value.trim();
+            const amount = Number(document.getElementById('exp-amount').value);
+            const cat = document.getElementById('exp-cat').value;
+            if (!name || !amount) { alert('항목명과 금액을 입력해 주세요.'); return; }
+            state.expenses.push({ id: Date.now(), name, amount, cat, date: new Date().toISOString().split('T')[0] });
+            document.getElementById('exp-name').value = '';
+            document.getElementById('exp-amount').value = '';
+            renderExpenses();
+        }
+
+        function renderExpenses() {
+            const totalSpent = state.expenses.reduce((s, e) => s + e.amount, 0);
+            const balance = state.budget - totalSpent;
+
+            document.getElementById('budget-spent').textContent = '₩' + totalSpent.toLocaleString();
+            document.getElementById('budget-balance').textContent = '₩' + balance.toLocaleString();
+            const bc = document.getElementById('balance-card');
+            bc.querySelector('.stat-val').style.color = balance < 0 ? 'var(--red)' : '';
+
+            // SUMIF per category
+            const bars = document.getElementById('cat-bars');
+            bars.innerHTML = CATS.map(cat => {
+                const total = state.expenses.filter(e => e.cat === cat).reduce((s, e) => s + e.amount, 0);
+                const pct = totalSpent ? (total / totalSpent * 100).toFixed(1) : 0;
+                return `
+      <div style="margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;font-size:.88rem;margin-bottom:4px">
+          <span>${cat}</span><span style="font-weight:600">₩${total.toLocaleString()}</span>
+        </div>
+        <div class="budget-bar-wrap"><div class="budget-bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+            }).join('');
+
+            // Expense list
+            const list = document.getElementById('exp-list');
+            list.innerHTML = state.expenses.length === 0
+                ? '<p style="color:var(--muted)">아직 입력된 경비가 없습니다.</p>'
+                : [...state.expenses].reverse().map(e => `
+        <div class="exp-row">
+          <div>
+            <div class="exp-name">${e.name}</div>
+            <div class="exp-meta">
+              <span class="chip chip-blue">${e.cat}</span>
+              <span style="color:var(--muted);font-size:.78rem">${e.date}</span>
+            </div>
+          </div>
+          <div class="exp-amount">₩${e.amount.toLocaleString()}</div>
+        </div>`).join('');
+        }
+
+        // ============================================================
+        //  WARNING MODAL
+        // ============================================================
+        function showWarn(name) {
+            document.getElementById('warn-msg').textContent = `"${name}"은(는) 부정적인 리뷰 비율이 30%를 초과합니다. 혼잡하거나 비용이 높다는 의견이 많습니다. 방문 전 최신 정보를 꼭 확인하세요.`;
+            document.getElementById('warn-modal').classList.add('open');
+        }
+        function closeWarn() {
+            document.getElementById('warn-modal').classList.remove('open');
+        }
+    </script>
+</body>
+
+</html>
